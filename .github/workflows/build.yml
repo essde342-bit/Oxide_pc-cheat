@@ -1,0 +1,82 @@
+name: Build Oxide PC Cheat
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-cheat:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - uses: nttld/setup-ndk@v1
+      id: ndk
+      with:
+        ndk-version: r26b
+
+    - name: Build cheat library
+      run: |
+        cd cheat
+        mkdir build && cd build
+        cmake .. \
+          -DCMAKE_TOOLCHAIN_FILE=${{ steps.ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake \
+          -DANDROID_ABI=arm64-v8a \
+          -DANDROID_PLATFORM=android-24 \
+          -DANDROID_STL=c++_static \
+          -DCMAKE_BUILD_TYPE=Release
+        make -j$(nproc)
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: liboxide_cheat
+        path: cheat/build/liboxide_cheat.so
+
+  build-injector:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build injector
+      run: |
+        cd injector
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+        cmake --build . --config Release
+
+    - name: Prepare artifact
+      shell: bash
+      run: |
+        mkdir -p artifact
+        cp injector/build/Release/injector.exe artifact/
+        cp injector/build/Release/cleanup.exe artifact/
+        cp injector/inject.bat artifact/
+        cp injector/cleanup.bat artifact/
+        cp injector/find_adb.bat artifact/
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: oxide-injector
+        path: artifact/
+
+  package:
+    needs: [build-cheat, build-injector]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/download-artifact@v4
+
+    - name: Package
+      run: |
+        mkdir oxide-pc-cheat
+        cp liboxide_cheat/liboxide_cheat.so oxide-pc-cheat/
+        cp oxide-injector/* oxide-pc-cheat/
+        zip -r oxide-pc-cheat.zip oxide-pc-cheat/
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: oxide-pc-cheat-full
+        path: oxide-pc-cheat.zip
