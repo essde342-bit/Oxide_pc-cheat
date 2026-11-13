@@ -84,7 +84,7 @@ static void DrawVerts(const Vertex* v, int count, GLenum mode) {
 }
 
 static void DrawRectFilled(float x, float y, float w, float h,
-                           float r, float g, float b, float a) {
+                            float r, float g, float b, float a) {
     Vertex v[6] = {
         {x,y,r,g,b,a},{x+w,y,r,g,b,a},{x+w,y+h,r,g,b,a},
         {x,y,r,g,b,a},{x+w,y+h,r,g,b,a},{x,y+h,r,g,b,a},
@@ -93,7 +93,7 @@ static void DrawRectFilled(float x, float y, float w, float h,
 }
 
 static void DrawLine(float x1, float y1, float x2, float y2,
-                     float r, float g, float b, float a, float t) {
+                      float r, float g, float b, float a, float t) {
     float dx=x2-x1, dy=y2-y1;
     float len=sqrtf(dx*dx+dy*dy);
     if(len<0.001f) return;
@@ -171,7 +171,8 @@ extern "C" EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 
     // Сохраняем GL состояние
     GLint prevProgram=0, prevVBO=0, prevVP[4], prevSc[4];
-    GLint prevBlendSrc=GL_ONE, prevBlendDst=GL_ZERO;
+    GLint prevBlendSrcRgb = GL_ONE, prevBlendDstRgb = GL_ZERO;
+    GLint prevBlendSrcAlpha = GL_ONE, prevBlendDstAlpha = GL_ZERO;
     GLboolean prevBlend=GL_FALSE, prevDepth=GL_FALSE;
     GLboolean prevCull=GL_FALSE, prevScissor=GL_FALSE;
 
@@ -179,8 +180,10 @@ extern "C" EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prevVBO);
     glGetIntegerv(GL_VIEWPORT, prevVP);
     glGetIntegerv(GL_SCISSOR_BOX, prevSc);
-    glGetIntegerv(GL_BLEND_SRC, &prevBlendSrc);
-    glGetIntegerv(GL_BLEND_DST, &prevBlendDst);
+    glGetIntegerv(GL_BLEND_SRC_RGB, &prevBlendSrcRgb);
+    glGetIntegerv(GL_BLEND_DST_RGB, &prevBlendDstRgb);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &prevBlendSrcAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &prevBlendDstAlpha);
     prevBlend   = glIsEnabled(GL_BLEND);
     prevDepth   = glIsEnabled(GL_DEPTH_TEST);
     prevCull    = glIsEnabled(GL_CULL_FACE);
@@ -201,7 +204,7 @@ extern "C" EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     if(prevBlend)   glEnable(GL_BLEND);        else glDisable(GL_BLEND);
     if(prevCull)    glEnable(GL_CULL_FACE);    else glDisable(GL_CULL_FACE);
     if(prevScissor) glEnable(GL_SCISSOR_TEST); else glDisable(GL_SCISSOR_TEST);
-    glBlendFunc(prevBlendSrc, prevBlendDst);
+    glBlendFuncSeparate(prevBlendSrcRgb, prevBlendDstRgb, prevBlendSrcAlpha, prevBlendDstAlpha);
     glViewport(prevVP[0], prevVP[1], prevVP[2], prevVP[3]);
     glScissor(prevSc[0], prevSc[1], prevSc[2], prevSc[3]);
     glBindBuffer(GL_ARRAY_BUFFER, prevVBO);
