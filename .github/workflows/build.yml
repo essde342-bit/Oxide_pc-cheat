@@ -11,17 +11,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Clone MinHook
-      run: |
-        mkdir -p include
-        git clone --depth 1 https://github.com/TsudaKageyu/minhook.git include/minhook
-
     - uses: nttld/setup-ndk@v1
       id: ndk
       with:
         ndk-version: r26b
 
-    - name: Build
+    - name: Build cheat
       run: |
         cd cheat
         mkdir build && cd build
@@ -43,7 +38,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Build
+    - name: Build injector
       run: |
         cd injector
         mkdir build
@@ -51,7 +46,7 @@ jobs:
         cmake .. -DCMAKE_BUILD_TYPE=Release
         cmake --build . --config Release
 
-    - name: Prepare
+    - name: Prepare artifact
       shell: bash
       run: |
         mkdir -p artifact
