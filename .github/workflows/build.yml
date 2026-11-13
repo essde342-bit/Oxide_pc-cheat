@@ -21,7 +21,7 @@ jobs:
       with:
         ndk-version: r26b
 
-    - name: Build cheat library
+    - name: Build
       run: |
         cd cheat
         mkdir build && cd build
@@ -43,7 +43,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Build injector
+    - name: Build
       run: |
         cd injector
         mkdir build
@@ -51,7 +51,7 @@ jobs:
         cmake .. -DCMAKE_BUILD_TYPE=Release
         cmake --build . --config Release
 
-    - name: Prepare artifact
+    - name: Prepare
       shell: bash
       run: |
         mkdir -p artifact
