@@ -4,10 +4,10 @@
 #include <dlfcn.h>
 #include <cmath>
 #include <cstring>
+#include <atomic>
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
 #include <android/log.h>
-#include "MinHook.h"
 
 #define LOG_TAG "OxideCheat"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -65,6 +65,7 @@ static void RendererInit() {
     g_locScreen = glGetUniformLocation(g_program, "uScreen");
     glGenBuffers(1, &g_vbo);
     g_rendererReady = true;
+    LOGI("Renderer initialized");
 }
 
 static void DrawVerts(const Vertex* v, int count, GLenum mode) {
@@ -113,21 +114,14 @@ static void DrawRectOutline(float x, float y, float w, float h,
 }
 
 // ============================================================
-// ESP
+// ESP + MENU
 // ============================================================
 static void ESPRender() {
-    // ТЕСТОВЫЙ прямоугольник — подтверждение что рендер работает
+    // Тестовый квадрат — подтверждение что работает
     DrawRectOutline(440,860,200,200, 1.0f,1.0f,0.0f,0.9f, 3.0f);
     DrawRectFilled(460,880,160,40, 0.2f,0.2f,0.8f,0.7f);
-
-    // РЕАЛЬНЫЙ ESP: раскомментировать когда найдены адреса
-    // PlayerData** list = *(PlayerData***)g_playerListAddr;
-    // ...
 }
 
-// ============================================================
-// MENU
-// ============================================================
 static void MenuRender() {
     DrawRectFilled(50,50,360,320, 0.08f,0.08f,0.12f,0.92f);
     DrawRectFilled(50,50,360,55, 0.15f,0.15f,0.5f,1.0f);
@@ -139,32 +133,47 @@ static void MenuRender() {
 }
 
 // ============================================================
-// HOOK
+// LD_PRELOAD HOOK — НИКАКОГО MINHOOK
 // ============================================================
-typedef EGLBoolean (*eglSwapBuffers_t)(EGLDisplay, EGLSurface);
-static eglSwapBuffers_t g_origSwapBuffers = nullptr;
-static bool g_initialized = false;
+static EGLBoolean (*g_realSwapBuffers)(EGLDisplay, EGLSurface) = nullptr;
+static std::atomic<bool> g_initDone(false);
 
 static void EnsureInit() {
-    if (g_initialized) return;
+    if (g_initDone.load()) return;
+
     GLint vp[4];
     glGetIntegerv(GL_VIEWPORT, vp);
     if (vp[2] > 0 && vp[3] > 0) {
         g_screenW = vp[2];
         g_screenH = vp[3];
     }
+
     RendererInit();
-    g_initialized = true;
-    LOGI("Initialized (%dx%d)", g_screenW, g_screenH);
+    g_initDone.store(true);
+    LOGI("Cheat active (%dx%d)", g_screenW, g_screenH);
 }
 
-static EGLBoolean HookedSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
+// Перехват через LD_PRELOAD: динамический линкер вызовет НАШУ
+// версию вместо оригинальной
+extern "C" EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
+    // Находим оригинал один раз
+    if (!g_realSwapBuffers) {
+        g_realSwapBuffers = (EGLBoolean(*)(EGLDisplay, EGLSurface))
+            dlsym(RTLD_NEXT, "eglSwapBuffers");
+        if (!g_realSwapBuffers) {
+            LOGE("Cannot find original eglSwapBuffers");
+            return EGL_FALSE;
+        }
+    }
+
+    // Инициализация при первом вызове
     EnsureInit();
 
-    // Сохраняем состояние
+    // Сохраняем GL состояние
     GLint prevProgram=0, prevVBO=0, prevVP[4], prevSc[4];
     GLint prevBlendSrc=GL_ONE, prevBlendDst=GL_ZERO;
-    GLboolean prevBlend=GL_FALSE, prevDepth=GL_FALSE, prevCull=GL_FALSE, prevScissor=GL_FALSE;
+    GLboolean prevBlend=GL_FALSE, prevDepth=GL_FALSE;
+    GLboolean prevCull=GL_FALSE, prevScissor=GL_FALSE;
 
     glGetIntegerv(GL_CURRENT_PROGRAM, &prevProgram);
     glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prevVBO);
@@ -198,48 +207,14 @@ static EGLBoolean HookedSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     glBindBuffer(GL_ARRAY_BUFFER, prevVBO);
     glUseProgram(prevProgram);
 
-    return g_origSwapBuffers(dpy, surface);
-}
-
-static void InstallHooks() {
-    if (MH_Initialize() != MH_OK) {
-        LOGE("MH_Initialize failed");
-        return;
-    }
-    void* libEGL = dlopen("libEGL.so", RTLD_NOW);
-    if (!libEGL) { LOGE("dlopen libEGL failed"); return; }
-
-    void* target = dlsym(libEGL, "eglSwapBuffers");
-    if (!target) { LOGE("dlsym failed"); return; }
-
-    if (MH_CreateHook(target, (void*)&HookedSwapBuffers, (void**)&g_origSwapBuffers) != MH_OK) {
-        LOGE("MH_CreateHook failed");
-        return;
-    }
-    if (MH_EnableHook(target) != MH_OK) {
-        LOGE("MH_EnableHook failed");
-        return;
-    }
-    LOGI("Hooked OK");
+    // Вызываем оригинал
+    return g_realSwapBuffers(dpy, surface);
 }
 
 // ============================================================
-// ENTRY POINT
+// CONSTRUCTOR
 // ============================================================
-static void* CheatThread(void*) {
-    int delay = 5;
-    const char* env = getenv("CHEAT_DELAY");
-    if (env) { int d = atoi(env); if (d > 0 && d < 60) delay = d; }
-    LOGI("Waiting %d sec...", delay);
-    sleep(delay);
-    InstallHooks();
-    return nullptr;
-}
-
 __attribute__((constructor))
 static void OnLoad() {
-    LOGI("Loaded");
-    pthread_t tid;
-    pthread_create(&tid, nullptr, CheatThread, nullptr);
-    pthread_detach(tid);
+    LOGI("OxideCheat loaded via LD_PRELOAD");
 }
