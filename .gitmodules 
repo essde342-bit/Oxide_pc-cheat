@@ -1,3 +1,0 @@
-[submodule "include/minhook"]
-	path = include/minhook
-	url = https://github.com/TsudaKageyu/minhook.git
