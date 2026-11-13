@@ -1,0 +1,11 @@
+build/
+obj/
+libs/
+*.o
+*.so
+*.a
+*.zip
+*.exe
+.idea/
+.vscode/
+.DS_Store
